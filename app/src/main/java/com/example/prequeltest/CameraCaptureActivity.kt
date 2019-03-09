@@ -1,30 +1,15 @@
 package com.example.prequeltest
 
 import android.content.res.Resources
-import android.graphics.SurfaceTexture
 import android.hardware.Camera
 import android.media.MediaPlayer
-import android.opengl.EGL14
-import android.opengl.EGLConfig
-import android.opengl.GLES20
-import android.opengl.GLSurfaceView
-import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Message
-import android.support.annotation.RequiresApi
 import android.support.v7.app.AppCompatActivity
 import android.util.Log
 import android.view.Window
 import android.view.WindowManager
-import android.widget.TextView
-import android.widget.Toast
 import com.sherazkhilji.videffects.SepiaEffect
 import kotlinx.android.synthetic.main.video_activity.*
-import java.io.File
-import java.io.IOException
-import java.lang.ref.WeakReference
-import javax.microedition.khronos.opengles.GL10
 
 
 /**
@@ -37,7 +22,7 @@ class CameraCaptureActivity : AppCompatActivity() {
     private lateinit var mMediaPlayer: MediaPlayer
 
     private lateinit var mCameraHandler: CameraTest.CameraHandler
-//    private lateinit var mRenderer: CameraTestCameraSurfaceRenderer
+    //    private lateinit var mRenderer: CameraTestCameraSurfaceRenderer
     private lateinit var mCamera: Camera
 
     private var mCameraPreviewWidth: Int = 0
