@@ -31,11 +31,11 @@ public class CameraTest extends Activity
 
     // Camera filters; must match up with cameraFilterNames in strings.xml
     static final int FILTER_NONE = 0;
-    static final int FILTER_BLACK_WHITE = 1;
-    static final int FILTER_BLUR = 2;
-    static final int FILTER_SHARPEN = 3;
-    static final int FILTER_EDGE_DETECT = 4;
-    static final int FILTER_EMBOSS = 5;
+    static final int FILTER_GRAIN = 1;
+    static final int FILTER_NEGATIVE = 2;
+    static final int FILTER_SEPIA = 3;
+//    static final int FILTER_EDGE_DETECT = 4;
+//    static final int FILTER_EMBOSS = 5;
 
     private GLSurfaceView mGLView;
     private CameraSurfaceRenderer mRenderer;
@@ -371,7 +371,7 @@ public class CameraTest extends Activity
  * GLSurfaceView#queueEvent() call.
  */
 class CameraSurfaceRenderer implements GLSurfaceView.Renderer {
-    private static final String TAG = CameraTest.TAG ;
+    private static final String TAG = CameraTest.TAG;
     private static final boolean VERBOSE = false;
 
     private static final int RECORDING_OFF = 0;
@@ -399,7 +399,6 @@ class CameraSurfaceRenderer implements GLSurfaceView.Renderer {
 
     private int mCurrentFilter;
     private int mNewFilter;
-
 
     /**
      * Constructs CameraSurfaceRenderer.
@@ -475,41 +474,50 @@ class CameraSurfaceRenderer implements GLSurfaceView.Renderer {
             case CameraTest.FILTER_NONE:
                 programType = Texture2dProgram.ProgramType.TEXTURE_EXT;
                 break;
-            case CameraTest.FILTER_BLACK_WHITE:
-                // (In a previous version the TEXTURE_EXT_BW variant was enabled by a flag called
-                // ROSE_COLORED_GLASSES, because the shader set the red channel to the B&W color
-                // and green/blue to zero.)
-                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_BW;
+            case CameraTest.FILTER_GRAIN:
+                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_GRAIN;
                 break;
-            case CameraTest.FILTER_BLUR:
-                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_FILT;
-                kernel = new float[]{
-                        1f / 16f, 2f / 16f, 1f / 16f,
-                        2f / 16f, 4f / 16f, 2f / 16f,
-                        1f / 16f, 2f / 16f, 1f / 16f};
+            case CameraTest.FILTER_NEGATIVE:
+                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_NEGATIVE;
                 break;
-            case CameraTest.FILTER_SHARPEN:
-                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_FILT;
-                kernel = new float[]{
-                        0f, -1f, 0f,
-                        -1f, 5f, -1f,
-                        0f, -1f, 0f};
+            case CameraTest.FILTER_SEPIA:
+                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_SEPIA;
                 break;
-            case CameraTest.FILTER_EDGE_DETECT:
-                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_FILT;
-                kernel = new float[]{
-                        -1f, -1f, -1f,
-                        -1f, 8f, -1f,
-                        -1f, -1f, -1f};
-                break;
-            case CameraTest.FILTER_EMBOSS:
-                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_FILT;
-                kernel = new float[]{
-                        2f, 0f, 0f,
-                        0f, -1f, 0f,
-                        0f, 0f, -1f};
-                colorAdj = 0.5f;
-                break;
+//            case CameraTest.FILTER_BLACK_WHITE:
+//                // (In a previous version the TEXTURE_EXT_BW variant was enabled by a flag called
+//                // ROSE_COLORED_GLASSES, because the shader set the red channel to the B&W color
+//                // and green/blue to zero.)
+//                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_BW;
+//                break;
+//            case CameraTest.FILTER_BLUR:
+//                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_FILT;
+//                kernel = new float[]{
+//                        1f / 16f, 2f / 16f, 1f / 16f,
+//                        2f / 16f, 4f / 16f, 2f / 16f,
+//                        1f / 16f, 2f / 16f, 1f / 16f};
+//                break;
+//            case CameraTest.FILTER_SHARPEN:
+//                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_FILT;
+//                kernel = new float[]{
+//                        0f, -1f, 0f,
+//                        -1f, 5f, -1f,
+//                        0f, -1f, 0f};
+//                break;
+//            case CameraTest.FILTER_EDGE_DETECT:
+//                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_FILT;
+//                kernel = new float[]{
+//                        -1f, -1f, -1f,
+//                        -1f, 8f, -1f,
+//                        -1f, -1f, -1f};
+//                break;
+//            case CameraTest.FILTER_EMBOSS:
+//                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_FILT;
+//                kernel = new float[]{
+//                        2f, 0f, 0f,
+//                        0f, -1f, 0f,
+//                        0f, 0f, -1f};
+//                colorAdj = 0.5f;
+//                break;
             default:
                 throw new RuntimeException("Unknown filter mode " + mNewFilter);
         }
@@ -517,7 +525,7 @@ class CameraSurfaceRenderer implements GLSurfaceView.Renderer {
         // Do we need a whole new program?  (We want to avoid doing this if we don't have
         // too -- compiling a program could be expensive.)
         if (programType != mFullScreen.getProgram().getProgramType()) {
-            mFullScreen.changeProgram(new Texture2dProgram(programType));
+            mFullScreen.changeProgram(new Texture2dProgram(programType, mIncomingWidth, mIncomingHeight));
             // If we created a new program, we need to initialize the texture width/height.
             mIncomingSizeUpdated = true;
         }
@@ -561,7 +569,7 @@ class CameraSurfaceRenderer implements GLSurfaceView.Renderer {
         // Set up the texture blitter that will be used for on-screen display.  This
         // is *not* applied to the recording, because that uses a separate shader.
         mFullScreen = new FullFrameRect(
-                new Texture2dProgram(Texture2dProgram.ProgramType.TEXTURE_EXT));
+                new Texture2dProgram(Texture2dProgram.ProgramType.TEXTURE_EXT, mIncomingWidth, mIncomingHeight));
 
         mTextureId = mFullScreen.createTextureObject();
 

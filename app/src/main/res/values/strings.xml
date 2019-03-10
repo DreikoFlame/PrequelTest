@@ -10,10 +10,8 @@
     <!-- for cameraFilter_spinner; match with CameraCaptureActivity constants -->
     <string-array name="cameraFilterNames">
         <item>Normal</item>
-        <item>Black &amp; white</item>
-        <item>Filter: blur</item>
-        <item>Filter: sharpen</item>
-        <item>Filter: edge detect</item>
-        <item>Filter: emboss</item>
+        <item>Grain</item>
+        <item>Negative</item>
+        <item>Sepia</item>
     </string-array>
 </resources>

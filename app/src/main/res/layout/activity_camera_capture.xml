@@ -28,6 +28,11 @@
             android:layout_alignParentRight="true"
             android:layout_centerInParent="true">
     </com.example.prequeltest.AspectFrameLayout>
+
+    <!--<com.sherazkhilji.videffects.view.VideoSurfaceView-->
+            <!--android:id="@+id/cameraPreview_surfaceView"-->
+            <!--android:layout_width="match_parent"-->
+            <!--android:layout_height="match_parent"/>-->
     <android.opengl.GLSurfaceView
             android:id="@+id/cameraPreview_surfaceView"
             android:layout_width="match_parent"
