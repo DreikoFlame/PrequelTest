@@ -21,7 +21,7 @@ class CameraSurfaceRenderer implements GLSurfaceView.Renderer {
     private static final String TAG = CameraSurfaceRenderer.class.getSimpleName();
     private static final boolean VERBOSE = false;
 
-    private CameraTest.CameraHandler mCameraHandler;
+    private CameraHandler mCameraHandler;
 
     private FullFrameRect mFullScreen;
 
@@ -44,7 +44,7 @@ class CameraSurfaceRenderer implements GLSurfaceView.Renderer {
      *
      * @param cameraHandler Handler for communicating with UI thread
      */
-    public CameraSurfaceRenderer(CameraTest.CameraHandler cameraHandler) {
+    public CameraSurfaceRenderer(CameraHandler cameraHandler) {
         mCameraHandler = cameraHandler;
 
         mTextureId = -1;
@@ -155,7 +155,7 @@ class CameraSurfaceRenderer implements GLSurfaceView.Renderer {
 
         // Tell the UI thread to enable the camera preview.
         mCameraHandler.sendMessage(mCameraHandler.obtainMessage(
-                CameraTest.CameraHandler.MSG_SET_SURFACE_TEXTURE, mSurfaceTexture));
+                CameraHandler.MSG_SET_SURFACE_TEXTURE, mSurfaceTexture));
     }
 
     @Override

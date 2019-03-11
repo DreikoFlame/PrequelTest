@@ -240,9 +240,11 @@ public class CameraTest extends Activity
         if (PermissionHelper.hasWriteStoragePermission(this)) {
             File pictures = Environment
                     .getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
-            //todo пофиксить формат имени файла и фриз превью после фото
+            //todo пофиксить формат имени файла и фриз превью после фото(попробовать заюзать CameraHandler)
             File photoFile = new File(pictures, "myphoto" + Calendar.getInstance().getTime().toString() + ".jpg");
-            //todo сменить на camera2(уйти от deprecated классов
+            //todo сменить на camera2(уйти от deprecated классов)
+            //todo для обработки картинок глянуть в примере использоание класса GeneratedTexture(возможно поможет)+ поискать там примеры работы с bitmap
+            //todo альтернативно глянуть FullFrameRect
             mCamera.takePicture(null, null, (data, camera) -> {
                 try {
                     Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
@@ -311,7 +313,7 @@ public class CameraTest extends Activity
     /**
      * Connects the SurfaceTexture to the Camera preview output, and starts the preview.
      */
-    private void handleSetSurfaceTexture(SurfaceTexture st) {
+     void handleSetSurfaceTexture(SurfaceTexture st) {
         st.setOnFrameAvailableListener(this);
         try {
             mCamera.setPreviewTexture(st);
@@ -337,52 +339,6 @@ public class CameraTest extends Activity
         // so it doesn't really matter.
         if (VERBOSE) Log.d(TAG, "ST onFrameAvailable");
         mGLView.requestRender();
-    }
-
-    /**
-     * Handles camera operation requests from other threads.  Necessary because the Camera
-     * must only be accessed from one thread.
-     * <p>
-     * The object is created on the UI thread, and all handlers run there.  Messages are
-     * sent from other threads, using sendMessage().
-     */
-    static class CameraHandler extends Handler {
-        public static final int MSG_SET_SURFACE_TEXTURE = 0;
-
-        // Weak reference to the Activity; only access this from the UI thread.
-        private WeakReference<CameraTest> mWeakActivity;
-
-        public CameraHandler(CameraTest activity) {
-            mWeakActivity = new WeakReference<CameraTest>(activity);
-        }
-
-        /**
-         * Drop the reference to the activity.  Useful as a paranoid measure to ensure that
-         * attempts to access a stale Activity through a handler are caught.
-         */
-        public void invalidateHandler() {
-            mWeakActivity.clear();
-        }
-
-        @Override  // runs on UI thread
-        public void handleMessage(Message inputMessage) {
-            int what = inputMessage.what;
-            Log.d(TAG, "CameraHandler [" + this + "]: what=" + what);
-
-            CameraTest activity = mWeakActivity.get();
-            if (activity == null) {
-                Log.w(TAG, "CameraHandler.handleMessage: activity is null");
-                return;
-            }
-
-            switch (what) {
-                case MSG_SET_SURFACE_TEXTURE:
-                    activity.handleSetSurfaceTexture((SurfaceTexture) inputMessage.obj);
-                    break;
-                default:
-                    throw new RuntimeException("unknown msg " + what);
-            }
-        }
     }
 }
 
