@@ -1,29 +1,31 @@
 package com.example.prequeltest;
 
 import android.app.Activity;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
-import android.opengl.EGL14;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
-import android.os.Build;
+import android.opengl.GLUtils;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
 import android.support.annotation.NonNull;
-import android.support.annotation.RequiresApi;
 import android.util.Log;
 import android.view.*;
 import android.widget.*;
-import com.example.prequeltest.gles.FullFrameRect;
-import com.example.prequeltest.gles.Texture2dProgram;
 
-import javax.microedition.khronos.egl.EGLConfig;
-import javax.microedition.khronos.opengles.GL10;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
+import java.util.Calendar;
+import java.util.Random;
 
+
+//todo удалить лишнее из папки gles
 public class CameraTest extends Activity
         implements SurfaceTexture.OnFrameAvailableListener, AdapterView.OnItemSelectedListener {
     static final String TAG = "CameraTest";
@@ -34,19 +36,13 @@ public class CameraTest extends Activity
     static final int FILTER_GRAIN = 1;
     static final int FILTER_NEGATIVE = 2;
     static final int FILTER_SEPIA = 3;
-//    static final int FILTER_EDGE_DETECT = 4;
-//    static final int FILTER_EMBOSS = 5;
 
     private GLSurfaceView mGLView;
     private CameraSurfaceRenderer mRenderer;
     private Camera mCamera;
     private CameraHandler mCameraHandler;
-    private boolean mRecordingEnabled;      // controls button state
 
     private int mCameraPreviewWidth, mCameraPreviewHeight;
-
-    // this is static so it survives activity restarts
-    private static TextureMovieEncoder sVideoEncoder = new TextureMovieEncoder();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -70,15 +66,12 @@ public class CameraTest extends Activity
         // thread, so we know the fully-constructed object will be visible.
         mCameraHandler = new CameraHandler(this);
 
-        mRecordingEnabled = sVideoEncoder.isRecording();
-
         // Configure the GLSurfaceView.  This will start the Renderer thread, with an
         // appropriate EGL context.
-        mGLView = (GLSurfaceView) findViewById(R.id.cameraPreview_surfaceView);
+        mGLView =  findViewById(R.id.cameraPreview_surfaceView);
         mGLView.setEGLContextClientVersion(2);     // select GLES 2.0
 
-        File outputFile = new File(getFilesDir(), "camera-test.mp4");//todo почистить от outputFile
-        mRenderer = new CameraSurfaceRenderer(mCameraHandler, sVideoEncoder, outputFile);
+        mRenderer = new CameraSurfaceRenderer(mCameraHandler);
         mGLView.setRenderer(mRenderer);
         mGLView.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
 
@@ -89,11 +82,10 @@ public class CameraTest extends Activity
     protected void onResume() {
         Log.d(TAG, "onResume -- acquiring camera");
         super.onResume();
-        updateControls();
 
         if (PermissionHelper.hasCameraPermission(this)) {
             if (mCamera == null) {
-                openCamera(1280, 720);      // updates mCameraPreviewWidth/Height
+                openCamera(1280, 720);      // updates mCameraPreviewWidth/Height //todo вынести в константы или высчитывать
             }
 
         } else {
@@ -101,12 +93,7 @@ public class CameraTest extends Activity
         }
 
         mGLView.onResume();
-        mGLView.queueEvent(new Runnable() {
-            @Override
-            public void run() {
-                mRenderer.setCameraPreviewSize(mCameraPreviewWidth, mCameraPreviewHeight);
-            }
-        });
+        mGLView.queueEvent(() -> mRenderer.setCameraPreviewSize(mCameraPreviewWidth, mCameraPreviewHeight));
         Log.d(TAG, "onResume complete: " + this);
     }
 
@@ -154,12 +141,9 @@ public class CameraTest extends Activity
         final int filterNum = spinner.getSelectedItemPosition();
 
         Log.d(TAG, "onItemSelected: " + filterNum);
-        mGLView.queueEvent(new Runnable() {
-            @Override
-            public void run() {
-                // notify the renderer that we want to change the encoder's state
-                mRenderer.changeFilterMode(filterNum);
-            }
+        mGLView.queueEvent(() -> {
+            // notify the renderer that we want to change the encoder's state
+            mRenderer.changeFilterMode(filterNum);
         });
     }
 
@@ -189,7 +173,7 @@ public class CameraTest extends Activity
             }
         }
         if (mCamera == null) {
-            Log.d(TAG, "No front-facing camera found; opening default");
+            Log.d(TAG, "No back-facing camera found; opening default");
             mCamera = Camera.open();    // opens first back-facing camera
         }
         if (mCamera == null) {
@@ -224,19 +208,19 @@ public class CameraTest extends Activity
         mCameraPreviewHeight = mCameraPreviewSize.height;
 
 
-        AspectFrameLayout layout = (AspectFrameLayout) findViewById(R.id.cameraPreview_afl);
+//        AspectFrameLayout layout = (AspectFrameLayout) findViewById(R.id.cameraPreview_afl);
 
         Display display = ((WindowManager) getSystemService(WINDOW_SERVICE)).getDefaultDisplay();
 
         if (display.getRotation() == Surface.ROTATION_0) {
             mCamera.setDisplayOrientation(90);
-            layout.setAspectRatio((double) mCameraPreviewHeight / mCameraPreviewWidth);
+//            layout.setAspectRatio((double) mCameraPreviewHeight / mCameraPreviewWidth);
         } else if (display.getRotation() == Surface.ROTATION_270) {
-            layout.setAspectRatio((double) mCameraPreviewHeight / mCameraPreviewWidth);
+//            layout.setAspectRatio((double) mCameraPreviewHeight / mCameraPreviewWidth);
             mCamera.setDisplayOrientation(180);
         } else {
             // Set the preview aspect ratio.
-            layout.setAspectRatio((double) mCameraPreviewWidth / mCameraPreviewHeight);
+//            layout.setAspectRatio((double) mCameraPreviewWidth / mCameraPreviewHeight);
         }
     }
 
@@ -252,38 +236,76 @@ public class CameraTest extends Activity
         }
     }
 
-    /**
-     * onClick handler for "record" button.
-     */
-    public void clickToggleRecording(@SuppressWarnings("unused") View unused) {
-        mRecordingEnabled = !mRecordingEnabled;
-        mGLView.queueEvent(new Runnable() {
-            @Override
-            public void run() {
-                // notify the renderer that we want to change the encoder's state
-                mRenderer.changeRecordingState(mRecordingEnabled);
-            }
-        });
-        updateControls();
+    public void takePhoto(View view) {
+        if (PermissionHelper.hasWriteStoragePermission(this)) {
+            File pictures = Environment
+                    .getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
+            //todo пофиксить формат имени файла и фриз превью после фото
+            File photoFile = new File(pictures, "myphoto" + Calendar.getInstance().getTime().toString() + ".jpg");
+            //todo сменить на camera2(уйти от deprecated классов
+            mCamera.takePicture(null, null, (data, camera) -> {
+                try {
+                    Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
+//                    FileOutputStream fos = new FileOutputStream(photoFile);
+//                    fos.write(data);
+//                    fos.close();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            });
+
+        } else {
+            PermissionHelper.requestWriteStoragePermission(this);
+        }
     }
 
-//    /**
-//     * onClick handler for "rebind" checkbox.
-//     */
-//    public void clickRebindCheckbox(View unused) {
-//        CheckBox cb = (CheckBox) findViewById(R.id.rebindHack_checkbox);
-//        TextureRender.sWorkAroundContextProblem = cb.isChecked();
-//    }
+    private void applyEffects(Bitmap bitmap) {
+        final int[] textureHandle = new int[1];
 
-    /**
-     * Updates the on-screen controls to reflect the current state of the app.
-     */
-    private void updateControls() {
-        int id = mRecordingEnabled ?
-                R.string.toggleRecordingOff : R.string.toggleRecordingOn;
+        GLES20.glGenTextures(1, textureHandle, 0);
 
-        //CheckBox cb = (CheckBox) findViewById(R.id.rebindHack_checkbox);
-        //cb.setChecked(TextureRender.sWorkAroundContextProblem);
+        if (textureHandle[0] != 0) {
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureHandle[0]);
+
+            // Set filtering
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
+
+            // Load the bitmap into the bound texture.
+            GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0);
+
+            // Recycle the bitmap, since its data has been loaded into OpenGL.
+            bitmap.recycle();
+        }
+        if (textureHandle[0] == 0) {
+            throw new RuntimeException("Error loading texture.");
+        }
+
+        SurfaceTexture texture = new SurfaceTexture(textureHandle[0]);
+
+    }
+
+    //todo удалить если не нужно
+    private void saveBitmap(Bitmap bitmap) {
+        String root = Environment.getExternalStorageDirectory().toString();
+        File myDir = new File(root + "/images");
+        myDir.mkdirs();
+        Random generator = new Random();
+        int n = 10000;
+        n = generator.nextInt(n);
+        String fname = "Image-" + n + ".jpg";
+        File file = new File(myDir, fname);
+        if (file.exists()) file.delete();
+        try {
+            FileOutputStream out = new FileOutputStream(file);
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out);
+            out.flush();
+            out.close();
+            Log.i("TAG", "Image SAVED==========" + file.getAbsolutePath());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
     }
 
     /**
@@ -364,326 +386,3 @@ public class CameraTest extends Activity
     }
 }
 
-/**
- * Renderer object for our GLSurfaceView.
- * <p>
- * Do not call any methods here directly from another thread -- use the
- * GLSurfaceView#queueEvent() call.
- */
-class CameraSurfaceRenderer implements GLSurfaceView.Renderer {
-    private static final String TAG = CameraTest.TAG;
-    private static final boolean VERBOSE = false;
-
-    private static final int RECORDING_OFF = 0;
-    private static final int RECORDING_ON = 1;
-    private static final int RECORDING_RESUMED = 2;
-
-    private CameraTest.CameraHandler mCameraHandler;
-    private TextureMovieEncoder mVideoEncoder;
-    private File mOutputFile;
-
-    private FullFrameRect mFullScreen;
-
-    private final float[] mSTMatrix = new float[16];
-    private int mTextureId;
-
-    private SurfaceTexture mSurfaceTexture;
-    private boolean mRecordingEnabled;
-    private int mRecordingStatus;
-    private int mFrameCount;
-
-    // width/height of the incoming camera preview frames
-    private boolean mIncomingSizeUpdated;
-    private int mIncomingWidth;
-    private int mIncomingHeight;
-
-    private int mCurrentFilter;
-    private int mNewFilter;
-
-    /**
-     * Constructs CameraSurfaceRenderer.
-     * <p>
-     *
-     * @param cameraHandler Handler for communicating with UI thread
-     * @param movieEncoder  video encoder object
-     * @param outputFile    output file for encoded video; forwarded to movieEncoder
-     */
-    public CameraSurfaceRenderer(CameraTest.CameraHandler cameraHandler,
-                                 TextureMovieEncoder movieEncoder, File outputFile) {
-        mCameraHandler = cameraHandler;
-        mVideoEncoder = movieEncoder;
-        mOutputFile = outputFile;
-
-        mTextureId = -1;
-
-        mRecordingStatus = -1;
-        mRecordingEnabled = false;
-        mFrameCount = -1;
-
-        mIncomingSizeUpdated = false;
-        mIncomingWidth = mIncomingHeight = -1;
-
-        // We could preserve the old filter mode, but currently not bothering.
-        mCurrentFilter = -1;
-        mNewFilter = CameraTest.FILTER_NONE;
-    }
-
-    /**
-     * Notifies the renderer thread that the activity is pausing.
-     * <p>
-     * For best results, call this *after* disabling Camera preview.
-     */
-    public void notifyPausing() {
-        if (mSurfaceTexture != null) {
-            Log.d(TAG, "renderer pausing -- releasing SurfaceTexture");
-            mSurfaceTexture.release();
-            mSurfaceTexture = null;
-        }
-        if (mFullScreen != null) {
-            mFullScreen.release(false);     // assume the GLSurfaceView EGL context is about
-            mFullScreen = null;             //  to be destroyed
-        }
-        mIncomingWidth = mIncomingHeight = -1;
-    }
-
-    /**
-     * Notifies the renderer that we want to stop or start recording.
-     */
-    public void changeRecordingState(boolean isRecording) {
-        Log.d(TAG, "changeRecordingState: was " + mRecordingEnabled + " now " + isRecording);
-        mRecordingEnabled = isRecording;
-    }
-
-    /**
-     * Changes the filter that we're applying to the camera preview.
-     */
-    public void changeFilterMode(int filter) {
-        mNewFilter = filter;
-    }
-
-    /**
-     * Updates the filter program.
-     */
-    public void updateFilter() {
-        Texture2dProgram.ProgramType programType;
-        float[] kernel = null;
-        float colorAdj = 0.0f;
-
-        Log.d(TAG, "Updating filter to " + mNewFilter);
-        switch (mNewFilter) {
-            case CameraTest.FILTER_NONE:
-                programType = Texture2dProgram.ProgramType.TEXTURE_EXT;
-                break;
-            case CameraTest.FILTER_GRAIN:
-                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_GRAIN;
-                break;
-            case CameraTest.FILTER_NEGATIVE:
-                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_NEGATIVE;
-                break;
-            case CameraTest.FILTER_SEPIA:
-                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_SEPIA;
-                break;
-//            case CameraTest.FILTER_BLACK_WHITE:
-//                // (In a previous version the TEXTURE_EXT_BW variant was enabled by a flag called
-//                // ROSE_COLORED_GLASSES, because the shader set the red channel to the B&W color
-//                // and green/blue to zero.)
-//                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_BW;
-//                break;
-//            case CameraTest.FILTER_BLUR:
-//                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_FILT;
-//                kernel = new float[]{
-//                        1f / 16f, 2f / 16f, 1f / 16f,
-//                        2f / 16f, 4f / 16f, 2f / 16f,
-//                        1f / 16f, 2f / 16f, 1f / 16f};
-//                break;
-//            case CameraTest.FILTER_SHARPEN:
-//                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_FILT;
-//                kernel = new float[]{
-//                        0f, -1f, 0f,
-//                        -1f, 5f, -1f,
-//                        0f, -1f, 0f};
-//                break;
-//            case CameraTest.FILTER_EDGE_DETECT:
-//                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_FILT;
-//                kernel = new float[]{
-//                        -1f, -1f, -1f,
-//                        -1f, 8f, -1f,
-//                        -1f, -1f, -1f};
-//                break;
-//            case CameraTest.FILTER_EMBOSS:
-//                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_FILT;
-//                kernel = new float[]{
-//                        2f, 0f, 0f,
-//                        0f, -1f, 0f,
-//                        0f, 0f, -1f};
-//                colorAdj = 0.5f;
-//                break;
-            default:
-                throw new RuntimeException("Unknown filter mode " + mNewFilter);
-        }
-
-        // Do we need a whole new program?  (We want to avoid doing this if we don't have
-        // too -- compiling a program could be expensive.)
-        if (programType != mFullScreen.getProgram().getProgramType()) {
-            mFullScreen.changeProgram(new Texture2dProgram(programType, mIncomingWidth, mIncomingHeight));
-            // If we created a new program, we need to initialize the texture width/height.
-            mIncomingSizeUpdated = true;
-        }
-
-        // Update the filter kernel (if any).
-        if (kernel != null) {
-            mFullScreen.getProgram().setKernel(kernel, colorAdj);
-        }
-
-        mCurrentFilter = mNewFilter;
-    }
-
-    /**
-     * Records the size of the incoming camera preview frames.
-     * <p>
-     * It's not clear whether this is guaranteed to execute before or after onSurfaceCreated(),
-     * so we assume it could go either way.  (Fortunately they both run on the same thread,
-     * so we at least know that they won't execute concurrently.)
-     */
-    public void setCameraPreviewSize(int width, int height) {
-        Log.d(TAG, "setCameraPreviewSize");
-        mIncomingWidth = width;
-        mIncomingHeight = height;
-        mIncomingSizeUpdated = true;
-    }
-
-    @Override
-    public void onSurfaceCreated(GL10 unused, EGLConfig config) {
-        Log.d(TAG, "onSurfaceCreated");
-
-        // We're starting up or coming back.  Either way we've got a new EGLContext that will
-        // need to be shared with the video encoder, so figure out if a recording is already
-        // in progress.
-        mRecordingEnabled = mVideoEncoder.isRecording();
-        if (mRecordingEnabled) {
-            mRecordingStatus = RECORDING_RESUMED;
-        } else {
-            mRecordingStatus = RECORDING_OFF;
-        }
-
-        // Set up the texture blitter that will be used for on-screen display.  This
-        // is *not* applied to the recording, because that uses a separate shader.
-        mFullScreen = new FullFrameRect(
-                new Texture2dProgram(Texture2dProgram.ProgramType.TEXTURE_EXT, mIncomingWidth, mIncomingHeight));
-
-        mTextureId = mFullScreen.createTextureObject();
-
-        // Create a SurfaceTexture, with an external texture, in this EGL context.  We don't
-        // have a Looper in this thread -- GLSurfaceView doesn't create one -- so the frame
-        // available messages will arrive on the main thread.
-        mSurfaceTexture = new SurfaceTexture(mTextureId);
-
-        // Tell the UI thread to enable the camera preview.
-        mCameraHandler.sendMessage(mCameraHandler.obtainMessage(
-                CameraTest.CameraHandler.MSG_SET_SURFACE_TEXTURE, mSurfaceTexture));
-    }
-
-    @Override
-    public void onSurfaceChanged(GL10 unused, int width, int height) {
-        Log.d(TAG, "onSurfaceChanged " + width + "x" + height);
-    }
-
-    @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR1)
-    @Override
-    public void onDrawFrame(GL10 unused) {
-        if (VERBOSE) Log.d(TAG, "onDrawFrame tex=" + mTextureId);
-        boolean showBox = false;
-
-        // Latch the latest frame.  If there isn't anything new, we'll just re-use whatever
-        // was there before.
-        mSurfaceTexture.updateTexImage();
-
-        // If the recording state is changing, take care of it here.  Ideally we wouldn't
-        // be doing all this in onDrawFrame(), but the EGLContext sharing with GLSurfaceView
-        // makes it hard to do elsewhere.
-        if (mRecordingEnabled) {
-            switch (mRecordingStatus) {
-                case RECORDING_OFF:
-                    Log.d(TAG, "START recording");
-                    // start recording
-                    mVideoEncoder.startRecording(new TextureMovieEncoder.EncoderConfig(
-                            mOutputFile, 640, 480, 1000000, EGL14.eglGetCurrentContext()));
-                    mRecordingStatus = RECORDING_ON;
-                    break;
-                case RECORDING_RESUMED:
-                    Log.d(TAG, "RESUME recording");
-                    mVideoEncoder.updateSharedContext(EGL14.eglGetCurrentContext());
-                    mRecordingStatus = RECORDING_ON;
-                    break;
-                case RECORDING_ON:
-                    // yay
-                    break;
-                default:
-                    throw new RuntimeException("unknown status " + mRecordingStatus);
-            }
-        } else {
-            switch (mRecordingStatus) {
-                case RECORDING_ON:
-                case RECORDING_RESUMED:
-                    // stop recording
-                    Log.d(TAG, "STOP recording");
-                    mVideoEncoder.stopRecording();
-                    mRecordingStatus = RECORDING_OFF;
-                    break;
-                case RECORDING_OFF:
-                    // yay
-                    break;
-                default:
-                    throw new RuntimeException("unknown status " + mRecordingStatus);
-            }
-        }
-
-        // Set the video encoder's texture name.  We only need to do this once, but in the
-        // current implementation it has to happen after the video encoder is started, so
-        // we just do it here.
-        //
-        // TODO: be less lame.
-        mVideoEncoder.setTextureId(mTextureId);
-
-        // Tell the video encoder thread that a new frame is available.
-        // This will be ignored if we're not actually recording.
-        mVideoEncoder.frameAvailable(mSurfaceTexture);
-
-        if (mIncomingWidth <= 0 || mIncomingHeight <= 0) {
-            // Texture size isn't set yet.  This is only used for the filters, but to be
-            // safe we can just skip drawing while we wait for the various races to resolve.
-            // (This seems to happen if you toggle the screen off/on with power button.)
-            Log.i(TAG, "Drawing before incoming texture size set; skipping");
-            return;
-        }
-        // Update the filter, if necessary.
-        if (mCurrentFilter != mNewFilter) {
-            updateFilter();
-        }
-        if (mIncomingSizeUpdated) {
-            mFullScreen.getProgram().setTexSize(mIncomingWidth, mIncomingHeight);
-            mIncomingSizeUpdated = false;
-        }
-
-        // Draw the video frame.
-        mSurfaceTexture.getTransformMatrix(mSTMatrix);
-        mFullScreen.drawFrame(mTextureId, mSTMatrix);
-
-        // Draw a flashing box if we're recording.  This only appears on screen.
-        showBox = (mRecordingStatus == RECORDING_ON);
-        if (showBox && (++mFrameCount & 0x04) == 0) {
-            drawBox();
-        }
-    }
-
-    /**
-     * Draws a red box in the corner.
-     */
-    private void drawBox() {
-        GLES20.glEnable(GLES20.GL_SCISSOR_TEST);
-        GLES20.glScissor(0, 0, 100, 100);
-        GLES20.glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
-        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
-        GLES20.glDisable(GLES20.GL_SCISSOR_TEST);
-    }
-}

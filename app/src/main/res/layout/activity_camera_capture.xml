@@ -20,19 +20,6 @@
                 android:layout_height="match_parent"
                 tools:context=".CameraTest">
 
-    <com.example.prequeltest.AspectFrameLayout
-            android:id="@+id/cameraPreview_afl"
-            android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:layout_alignParentBottom="true"
-            android:layout_alignParentRight="true"
-            android:layout_centerInParent="true">
-    </com.example.prequeltest.AspectFrameLayout>
-
-    <!--<com.sherazkhilji.videffects.view.VideoSurfaceView-->
-            <!--android:id="@+id/cameraPreview_surfaceView"-->
-            <!--android:layout_width="match_parent"-->
-            <!--android:layout_height="match_parent"/>-->
     <android.opengl.GLSurfaceView
             android:id="@+id/cameraPreview_surfaceView"
             android:layout_width="match_parent"
@@ -54,5 +41,11 @@
             android:layout_alignParentBottom="true"
             android:text="[?]"
             android:textAppearance="?android:attr/textAppearanceMedium"/>
+
+    <Button android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Photo"
+            android:layout_alignParentBottom="true"
+            android:onClick="takePhoto"
+            android:layout_alignParentEnd="true"/>
 
 </RelativeLayout>
