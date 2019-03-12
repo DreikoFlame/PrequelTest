@@ -7,11 +7,4 @@
     <string name="cameraOutputFileLabel_text">Output file:</string>
     <string name="cameraOutputFile_text">[filename]</string>
 
-    <!-- for cameraFilter_spinner; match with CameraCaptureActivity constants -->
-    <string-array name="cameraFilterNames">
-        <item>Normal</item>
-        <item>Grain</item>
-        <item>Negative</item>
-        <item>Sepia</item>
-    </string-array>
 </resources>
