@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.example.prequeltest.gles;
+package com.example.prequeltest.grafika;
 
 /**
  * This class essentially represents a viewport-sized sprite that will be rendered with

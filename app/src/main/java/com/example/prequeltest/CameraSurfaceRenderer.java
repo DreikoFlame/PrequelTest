@@ -5,8 +5,10 @@ import android.opengl.GLSurfaceView;
 import android.os.Build;
 import android.support.annotation.RequiresApi;
 import android.util.Log;
-import com.example.prequeltest.gles.FullFrameRect;
-import com.example.prequeltest.gles.Texture2dProgram;
+import com.example.prequeltest.effects.FilterEffect;
+import com.example.prequeltest.effects.NoFilter;
+import com.example.prequeltest.grafika.FullFrameRect;
+import com.example.prequeltest.grafika.Texture2dProgram;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -35,8 +37,7 @@ class CameraSurfaceRenderer implements GLSurfaceView.Renderer {
     private int mIncomingWidth;
     private int mIncomingHeight;
 
-    private int mCurrentFilter;
-    private int mNewFilter;
+    private FilterEffect mNewFilter,mCurrentFilter;
 
     /**
      * Constructs CameraSurfaceRenderer.
@@ -52,8 +53,8 @@ class CameraSurfaceRenderer implements GLSurfaceView.Renderer {
         mIncomingSizeUpdated = false;
         mIncomingWidth = mIncomingHeight = -1;
 
-        mCurrentFilter = -1;
-        mNewFilter = CameraTest.FILTER_NONE;
+        mCurrentFilter = null;
+        mNewFilter = new NoFilter();
     }
 
     /**
@@ -77,47 +78,20 @@ class CameraSurfaceRenderer implements GLSurfaceView.Renderer {
     /**
      * Changes the filter that we're applying to the camera preview.
      */
-    public void changeFilterMode(int filter) {
+    public void changeFilter(FilterEffect filter) {
         mNewFilter = filter;
     }
 
     /**
      * Updates the filter program.
      */
-    public void updateFilter() {
-        Texture2dProgram.ProgramType programType;
-        float[] kernel = null;
-        float colorAdj = 0.0f;
+    private void updateFilter() {
+        Log.d(TAG, "Updating filter to " + mNewFilter.getFilterName());
 
-        Log.d(TAG, "Updating filter to " + mNewFilter);
-        switch (mNewFilter) {
-            case CameraTest.FILTER_NONE:
-                programType = Texture2dProgram.ProgramType.TEXTURE_EXT;
-                break;
-            case CameraTest.FILTER_GRAIN:
-                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_GRAIN;
-                break;
-            case CameraTest.FILTER_NEGATIVE:
-                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_NEGATIVE;
-                break;
-            case CameraTest.FILTER_SEPIA:
-                programType = Texture2dProgram.ProgramType.TEXTURE_EXT_SEPIA;
-                break;
-            default:
-                throw new RuntimeException("Unknown filter mode " + mNewFilter);
-        }
-
-        // Do we need a whole new program?  (We want to avoid doing this if we don't have
-        // too -- compiling a program could be expensive.)
-        if (programType != mFullScreen.getProgram().getProgramType()) {
-            mFullScreen.changeProgram(new Texture2dProgram(programType, mIncomingWidth, mIncomingHeight));
+        if (mNewFilter.getFilterCode() != mFullScreen.getProgram().getFilterCode()){
+            mFullScreen.changeProgram(new Texture2dProgram(mNewFilter));
             // If we created a new program, we need to initialize the texture width/height.
             mIncomingSizeUpdated = true;
-        }
-
-        // Update the filter kernel (if any).
-        if (kernel != null) {
-            mFullScreen.getProgram().setKernel(kernel, colorAdj);
         }
 
         mCurrentFilter = mNewFilter;
@@ -130,7 +104,7 @@ class CameraSurfaceRenderer implements GLSurfaceView.Renderer {
      * so we assume it could go either way.  (Fortunately they both run on the same thread,
      * so we at least know that they won't execute concurrently.)
      */
-    public void setCameraPreviewSize(int width, int height) {
+    void setCameraPreviewSize(int width, int height) {
         Log.d(TAG, "setCameraPreviewSize");
         mIncomingWidth = width;
         mIncomingHeight = height;
@@ -144,7 +118,7 @@ class CameraSurfaceRenderer implements GLSurfaceView.Renderer {
         // Set up the texture blitter that will be used for on-screen display.  This
         // is *not* applied to the recording, because that uses a separate shader.
         mFullScreen = new FullFrameRect(
-                new Texture2dProgram(Texture2dProgram.ProgramType.TEXTURE_EXT, mIncomingWidth, mIncomingHeight));
+                new Texture2dProgram(new NoFilter()));
 
         mTextureId = mFullScreen.createTextureObject();
 
@@ -171,8 +145,6 @@ class CameraSurfaceRenderer implements GLSurfaceView.Renderer {
         // Latch the latest frame.  If there isn't anything new, we'll just re-use whatever
         // was there before.
         mSurfaceTexture.updateTexImage();
-
-        //todo глянуть в grafica в этом месте писалось видео, возможно получить по аналогии сделать эффект для картинки
 
         if (mIncomingWidth <= 0 || mIncomingHeight <= 0) {
             // Texture size isn't set yet.  This is only used for the filters, but to be

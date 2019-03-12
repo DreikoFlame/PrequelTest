@@ -1,6 +1,5 @@
 package com.example.prequeltest;
 
-import android.app.Activity;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.SurfaceTexture;
@@ -10,39 +9,41 @@ import android.opengl.GLSurfaceView;
 import android.opengl.GLUtils;
 import android.os.Bundle;
 import android.os.Environment;
-import android.os.Handler;
-import android.os.Message;
 import android.support.annotation.NonNull;
+import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.*;
-import android.widget.*;
+import android.widget.Toast;
+import com.example.prequeltest.effects.*;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.lang.ref.WeakReference;
+import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.List;
 import java.util.Random;
 
-
-//todo удалить лишнее из папки gles
-public class CameraTest extends Activity
-        implements SurfaceTexture.OnFrameAvailableListener, AdapterView.OnItemSelectedListener {
-    static final String TAG = "CameraTest";
+public class CameraCaptureActivity extends AppCompatActivity implements SurfaceTexture.OnFrameAvailableListener {
+    static final String TAG = "CameraCaptureActivity";
     private static final boolean VERBOSE = false;
 
-    // Camera filters; must match up with cameraFilterNames in strings.xml
-    static final int FILTER_NONE = 0;
-    static final int FILTER_GRAIN = 1;
-    static final int FILTER_NEGATIVE = 2;
-    static final int FILTER_SEPIA = 3;
 
     private GLSurfaceView mGLView;
     private CameraSurfaceRenderer mRenderer;
     private Camera mCamera;
     private CameraHandler mCameraHandler;
 
+    private List<FilterEffect> mFilters = new ArrayList<>();
+    private int mSelectedFilterPosition = 0;
+
     private int mCameraPreviewWidth, mCameraPreviewHeight;
+
+    //swipe detection
+    private float xStart, xEnd;
+    private final int MIN_DISTANCE = 150;
+    private final int DESIRED_WIDTH = 720;
+    private final int DESIRED_HEIGHT = 1280;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,14 +54,6 @@ public class CameraTest extends Activity
 
         setContentView(R.layout.activity_camera_capture);
 
-        Spinner spinner = (Spinner) findViewById(R.id.cameraFilter_spinner);
-        ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(this,
-                R.array.cameraFilterNames, android.R.layout.simple_spinner_item);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        // Apply the adapter to the spinner.
-        spinner.setAdapter(adapter);
-        spinner.setOnItemSelectedListener(this);
-
         // Define a handler that receives camera-control messages from other threads.  All calls
         // to Camera must be made on the same thread.  Note we create this before the renderer
         // thread, so we know the fully-constructed object will be visible.
@@ -68,7 +61,7 @@ public class CameraTest extends Activity
 
         // Configure the GLSurfaceView.  This will start the Renderer thread, with an
         // appropriate EGL context.
-        mGLView =  findViewById(R.id.cameraPreview_surfaceView);
+        mGLView = findViewById(R.id.camera_preview_surfaceView);
         mGLView.setEGLContextClientVersion(2);     // select GLES 2.0
 
         mRenderer = new CameraSurfaceRenderer(mCameraHandler);
@@ -85,7 +78,7 @@ public class CameraTest extends Activity
 
         if (PermissionHelper.hasCameraPermission(this)) {
             if (mCamera == null) {
-                openCamera(1280, 720);      // updates mCameraPreviewWidth/Height //todo вынести в константы или высчитывать
+                openCamera(DESIRED_WIDTH, DESIRED_HEIGHT);      // updates mCameraPreviewWidth/Height
             }
 
         } else {
@@ -102,12 +95,9 @@ public class CameraTest extends Activity
         Log.d(TAG, "onPause -- releasing camera");
         super.onPause();
         releaseCamera();
-        mGLView.queueEvent(new Runnable() {
-            @Override
-            public void run() {
-                // Tell the renderer that it's about to be paused so it can clean up.
-                mRenderer.notifyPausing();
-            }
+        mGLView.queueEvent(() -> {
+            // Tell the renderer that it's about to be paused so it can clean up.
+            mRenderer.notifyPausing();
         });
         mGLView.onPause();
         Log.d(TAG, "onPause complete");
@@ -118,37 +108,6 @@ public class CameraTest extends Activity
         Log.d(TAG, "onDestroy");
         super.onDestroy();
         mCameraHandler.invalidateHandler();     // paranoia
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (!PermissionHelper.hasCameraPermission(this)) {
-            Toast.makeText(this,
-                    "Camera permission is needed to run this application", Toast.LENGTH_LONG).show();
-            PermissionHelper.launchPermissionSettings(this);
-            finish();
-        } else {
-            openCamera(1280, 720);      // updates mCameraPreviewWidth/Height
-
-        }
-    }
-
-    // spinner selected
-    @Override
-    public void onItemSelected(AdapterView<?> parent, View view, int pos, long id) {
-        Spinner spinner = (Spinner) parent;
-        final int filterNum = spinner.getSelectedItemPosition();
-
-        Log.d(TAG, "onItemSelected: " + filterNum);
-        mGLView.queueEvent(() -> {
-            // notify the renderer that we want to change the encoder's state
-            mRenderer.changeFilterMode(filterNum);
-        });
-    }
-
-    @Override
-    public void onNothingSelected(AdapterView<?> parent) {
     }
 
     /**
@@ -194,33 +153,18 @@ public class CameraTest extends Activity
         int[] fpsRange = new int[2];
         Camera.Size mCameraPreviewSize = parms.getPreviewSize();
         parms.getPreviewFpsRange(fpsRange);
-        String previewFacts = mCameraPreviewSize.width + "x" + mCameraPreviewSize.height;
-        if (fpsRange[0] == fpsRange[1]) {
-            previewFacts += " @" + (fpsRange[0] / 1000.0) + "fps";
-        } else {
-            previewFacts += " @[" + (fpsRange[0] / 1000.0) +
-                    " - " + (fpsRange[1] / 1000.0) + "] fps";
-        }
-        TextView text = (TextView) findViewById(R.id.cameraParams_text);
-        text.setText(previewFacts);
 
         mCameraPreviewWidth = mCameraPreviewSize.width;
         mCameraPreviewHeight = mCameraPreviewSize.height;
 
-
-//        AspectFrameLayout layout = (AspectFrameLayout) findViewById(R.id.cameraPreview_afl);
+        fillFilterList();
 
         Display display = ((WindowManager) getSystemService(WINDOW_SERVICE)).getDefaultDisplay();
 
         if (display.getRotation() == Surface.ROTATION_0) {
             mCamera.setDisplayOrientation(90);
-//            layout.setAspectRatio((double) mCameraPreviewHeight / mCameraPreviewWidth);
         } else if (display.getRotation() == Surface.ROTATION_270) {
-//            layout.setAspectRatio((double) mCameraPreviewHeight / mCameraPreviewWidth);
             mCamera.setDisplayOrientation(180);
-        } else {
-            // Set the preview aspect ratio.
-//            layout.setAspectRatio((double) mCameraPreviewWidth / mCameraPreviewHeight);
         }
     }
 
@@ -234,6 +178,13 @@ public class CameraTest extends Activity
             mCamera = null;
             Log.d(TAG, "releaseCamera -- done");
         }
+    }
+
+    private void fillFilterList() {
+        mFilters.add(new NoFilter());
+        mFilters.add(new GrainEffect(0.2f, mCameraPreviewWidth, mCameraPreviewHeight));
+        mFilters.add(new NegativeEffect());
+        mFilters.add(new SepiaEffect());
     }
 
     public void takePhoto(View view) {
@@ -284,7 +235,6 @@ public class CameraTest extends Activity
         }
 
         SurfaceTexture texture = new SurfaceTexture(textureHandle[0]);
-
     }
 
     //todo удалить если не нужно
@@ -313,7 +263,7 @@ public class CameraTest extends Activity
     /**
      * Connects the SurfaceTexture to the Camera preview output, and starts the preview.
      */
-     void handleSetSurfaceTexture(SurfaceTexture st) {
+    void handleSetSurfaceTexture(SurfaceTexture st) {
         st.setOnFrameAvailableListener(this);
         try {
             mCamera.setPreviewTexture(st);
@@ -339,6 +289,58 @@ public class CameraTest extends Activity
         // so it doesn't really matter.
         if (VERBOSE) Log.d(TAG, "ST onFrameAvailable");
         mGLView.requestRender();
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                xStart = event.getX();
+                break;
+            case MotionEvent.ACTION_UP:
+                xEnd = event.getX();
+
+                if (xEnd - xStart > MIN_DISTANCE) {
+                    onNewFilterSelected(true);
+                } else if (xStart - xEnd > MIN_DISTANCE) {
+                    onNewFilterSelected(false);
+                }
+                break;
+        }
+        return super.onTouchEvent(event);
+    }
+
+    private void onNewFilterSelected(boolean isLeftToRightSwipe) {
+        FilterEffect newFilter;
+        if (isLeftToRightSwipe) {
+            mSelectedFilterPosition++;
+            if (mSelectedFilterPosition > mFilters.size() - 1) {
+                mSelectedFilterPosition = 0;
+            }
+        } else {
+            mSelectedFilterPosition--;
+            if (mSelectedFilterPosition < 0) {
+                mSelectedFilterPosition = mFilters.size() - 1;
+            }
+        }
+        newFilter = mFilters.get(mSelectedFilterPosition);
+        mGLView.queueEvent(() -> {
+            // notify the renderer that we want to change the encoder's state
+            mRenderer.changeFilter(newFilter);
+        });
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (!PermissionHelper.hasCameraPermission(this)) {
+            Toast.makeText(this,
+                    "Camera permission is needed to run this application", Toast.LENGTH_LONG).show();
+            PermissionHelper.launchPermissionSettings(this);
+            finish();
+        } else {
+            openCamera(DESIRED_WIDTH, DESIRED_HEIGHT);      // updates mCameraPreviewWidth/Height
+        }
     }
 }
 

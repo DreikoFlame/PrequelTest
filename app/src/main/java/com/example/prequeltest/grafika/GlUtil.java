@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.example.prequeltest.gles;
+package com.example.prequeltest.grafika;
 
 import android.opengl.GLES20;
 import android.opengl.GLES30;

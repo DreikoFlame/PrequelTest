@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.example.prequeltest.gles;
+package com.example.prequeltest.grafika;
 
 import java.nio.FloatBuffer;
 

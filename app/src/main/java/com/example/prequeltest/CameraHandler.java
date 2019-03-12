@@ -19,9 +19,9 @@ class CameraHandler extends Handler {
     static final int MSG_SET_SURFACE_TEXTURE = 0;
 
     // Weak reference to the Activity; only access this from the UI thread.
-    private WeakReference<CameraTest> mWeakActivity;
+    private WeakReference<CameraCaptureActivity> mWeakActivity;
 
-    public CameraHandler(CameraTest activity) {
+    public CameraHandler(CameraCaptureActivity activity) {
         mWeakActivity = new WeakReference<>(activity);
     }
 
@@ -38,7 +38,7 @@ class CameraHandler extends Handler {
         int what = inputMessage.what;
         Log.d(TAG, "CameraHandler [" + this + "]: what=" + what);
 
-        CameraTest activity = mWeakActivity.get();
+        CameraCaptureActivity activity = mWeakActivity.get();
         if (activity == null) {
             Log.w(TAG, "CameraHandler.handleMessage: activity is null");
             return;

@@ -9,7 +9,7 @@ import java.util.List;
  * Camera-related utility functions.
  */
 public class CameraUtils {
-    private static final String TAG = CameraTest.TAG;
+    private static final String TAG = CameraCaptureActivity.TAG;
 
     /**
      * Attempts to find a preview size that matches the provided width and height (which
