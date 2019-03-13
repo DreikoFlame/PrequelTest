@@ -1,49 +1,55 @@
 package com.example.prequeltest;
 
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
+import android.animation.AnimatorSet;
+import android.animation.ObjectAnimator;
+import android.content.Intent;
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
-import android.opengl.GLES20;
+import android.net.Uri;
 import android.opengl.GLSurfaceView;
-import android.opengl.GLUtils;
 import android.os.Bundle;
 import android.os.Environment;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.*;
+import android.widget.ImageView;
+import android.widget.ProgressBar;
 import android.widget.Toast;
 import com.example.prequeltest.effects.*;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
-import java.util.Random;
+import java.util.Locale;
 
 public class CameraCaptureActivity extends AppCompatActivity implements SurfaceTexture.OnFrameAvailableListener {
     static final String TAG = "CameraCaptureActivity";
     private static final boolean VERBOSE = false;
 
-
     private GLSurfaceView mGLView;
+    private ProgressBar mProgressBar;
+    private ImageView mTakePhotoBtn;
     private CameraSurfaceRenderer mRenderer;
     private Camera mCamera;
     private CameraHandler mCameraHandler;
 
     private List<FilterEffect> mFilters = new ArrayList<>();
     private int mSelectedFilterPosition = 0;
-
     private int mCameraPreviewWidth, mCameraPreviewHeight;
+    private boolean mIsPhotoTaken = false;
 
     //swipe detection
     private float xStart, xEnd;
     private final int MIN_DISTANCE = 150;
     private final int DESIRED_WIDTH = 720;
     private final int DESIRED_HEIGHT = 1280;
+    private final int BTN_ANIMATION_TIME = 300;
+    private final float BTN_SCALE_UP_SIZE = 1.5f;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,7 +74,57 @@ public class CameraCaptureActivity extends AppCompatActivity implements SurfaceT
         mGLView.setRenderer(mRenderer);
         mGLView.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
 
+        mProgressBar = findViewById(R.id.progress_bar);
+        mTakePhotoBtn = findViewById(R.id.take_photo_btn);
+
+        initTakePhotoBtn();
+
         Log.d(TAG, "onCreate complete: " + this);
+    }
+
+    private void initTakePhotoBtn() {
+        mTakePhotoBtn.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    ObjectAnimator scaleUpX = ObjectAnimator.ofFloat(mTakePhotoBtn,
+                            "scaleX", BTN_SCALE_UP_SIZE);
+                    ObjectAnimator scaleUpY = ObjectAnimator.ofFloat(mTakePhotoBtn,
+                            "scaleY", BTN_SCALE_UP_SIZE);
+                    scaleUpX.setDuration(BTN_ANIMATION_TIME);
+                    scaleUpY.setDuration(BTN_ANIMATION_TIME);
+
+                    AnimatorSet scaleUp = new AnimatorSet();
+                    scaleUp.play(scaleUpX).with(scaleUpY);
+
+                    scaleUp.start();
+                    if (!mIsPhotoTaken) {
+                        mIsPhotoTaken = true;
+                        mCameraHandler.sendMessage(mCameraHandler.obtainMessage(
+                                CameraHandler.MSG_TAKE_PHOTO, null));
+                    }
+
+                    break;
+
+                case MotionEvent.ACTION_OUTSIDE:
+                case MotionEvent.ACTION_UP:
+                    mIsPhotoTaken = false;
+                    ObjectAnimator scaleDownX = ObjectAnimator.ofFloat(
+                            mTakePhotoBtn, "scaleX", 1f);
+                    ObjectAnimator scaleDownY = ObjectAnimator.ofFloat(
+                            mTakePhotoBtn, "scaleY", 1f);
+                    scaleDownX.setDuration(BTN_ANIMATION_TIME);
+                    scaleDownY.setDuration(BTN_ANIMATION_TIME);
+
+                    AnimatorSet scaleDown = new AnimatorSet();
+                    scaleDown.play(scaleDownX).with(scaleDownY);
+
+                    scaleDown.start();
+
+                    break;
+
+            }
+            return true;
+        });
     }
 
     @Override
@@ -108,6 +164,56 @@ public class CameraCaptureActivity extends AppCompatActivity implements SurfaceT
         Log.d(TAG, "onDestroy");
         super.onDestroy();
         mCameraHandler.invalidateHandler();     // paranoia
+    }
+
+    @Override
+    public void onFrameAvailable(SurfaceTexture st) {
+        // The SurfaceTexture uses this to signal the availability of a new frame.  The
+        // thread that "owns" the external texture associated with the SurfaceTexture (which,
+        // by virtue of the context being shared, *should* be either one) needs to call
+        // updateTexImage() to latch the buffer.
+        //
+        // Once the buffer is latched, the GLSurfaceView thread can signal the encoder thread.
+        // This feels backward -- we want recording to be prioritized over rendering -- but
+        // since recording is only enabled some of the time it's easier to do it this way.
+        //
+        // Since GLSurfaceView doesn't establish a Looper, this will *probably* execute on
+        // the main UI thread.  Fortunately, requestRender() can be called from any thread,
+        // so it doesn't really matter.
+        if (VERBOSE) Log.d(TAG, "ST onFrameAvailable");
+        mGLView.requestRender();
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                xStart = event.getX();
+                break;
+            case MotionEvent.ACTION_UP:
+                xEnd = event.getX();
+
+                if (xEnd - xStart > MIN_DISTANCE) {
+                    onNewFilterSelected(true);
+                } else if (xStart - xEnd > MIN_DISTANCE) {
+                    onNewFilterSelected(false);
+                }
+                break;
+        }
+        return super.onTouchEvent(event);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (!PermissionHelper.hasCameraPermission(this)) {
+            Toast.makeText(this,
+                    "Camera permission is needed to run this application", Toast.LENGTH_LONG).show();
+            PermissionHelper.launchPermissionSettings(this);
+            finish();
+        } else {
+            openCamera(DESIRED_WIDTH, DESIRED_HEIGHT);      // updates mCameraPreviewWidth/Height
+        }
     }
 
     /**
@@ -187,77 +293,39 @@ public class CameraCaptureActivity extends AppCompatActivity implements SurfaceT
         mFilters.add(new SepiaEffect());
     }
 
-    public void takePhoto(View view) {
+    public void takePhoto() {
         if (PermissionHelper.hasWriteStoragePermission(this)) {
+            mProgressBar.setVisibility(View.VISIBLE);
             File pictures = Environment
                     .getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
-            //todo пофиксить формат имени файла и фриз превью после фото(попробовать заюзать CameraHandler)
-            File photoFile = new File(pictures, "myphoto" + Calendar.getInstance().getTime().toString() + ".jpg");
-            //todo сменить на camera2(уйти от deprecated классов)
-            //todo для обработки картинок глянуть в примере использоание класса GeneratedTexture(возможно поможет)+ поискать там примеры работы с bitmap
-            //todo альтернативно глянуть FullFrameRect
+            String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Calendar.getInstance().getTime());
+            File photoFile = new File(pictures, "img_" + timeStamp + ".jpg");
             mCamera.takePicture(null, null, (data, camera) -> {
                 try {
-                    Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
-//                    FileOutputStream fos = new FileOutputStream(photoFile);
-//                    fos.write(data);
-//                    fos.close();
+                    FileOutputStream fos = new FileOutputStream(photoFile);
+                    fos.write(data);
+                    fos.flush();
+                    fos.close();
+                    Toast.makeText(CameraCaptureActivity.this, "Image saved", Toast.LENGTH_LONG).show();
                 } catch (Exception e) {
                     e.printStackTrace();
+                } finally {
+                    mProgressBar.setVisibility(View.GONE);
+                    addPhotoToMedia(photoFile);
+                    mCamera.startPreview();
                 }
             });
-
         } else {
             PermissionHelper.requestWriteStoragePermission(this);
         }
     }
 
-    private void applyEffects(Bitmap bitmap) {
-        final int[] textureHandle = new int[1];
-
-        GLES20.glGenTextures(1, textureHandle, 0);
-
-        if (textureHandle[0] != 0) {
-            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureHandle[0]);
-
-            // Set filtering
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
-
-            // Load the bitmap into the bound texture.
-            GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0);
-
-            // Recycle the bitmap, since its data has been loaded into OpenGL.
-            bitmap.recycle();
-        }
-        if (textureHandle[0] == 0) {
-            throw new RuntimeException("Error loading texture.");
-        }
-
-        SurfaceTexture texture = new SurfaceTexture(textureHandle[0]);
-    }
-
-    //todo удалить если не нужно
-    private void saveBitmap(Bitmap bitmap) {
-        String root = Environment.getExternalStorageDirectory().toString();
-        File myDir = new File(root + "/images");
-        myDir.mkdirs();
-        Random generator = new Random();
-        int n = 10000;
-        n = generator.nextInt(n);
-        String fname = "Image-" + n + ".jpg";
-        File file = new File(myDir, fname);
-        if (file.exists()) file.delete();
-        try {
-            FileOutputStream out = new FileOutputStream(file);
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out);
-            out.flush();
-            out.close();
-            Log.i("TAG", "Image SAVED==========" + file.getAbsolutePath());
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
+    //send broadcast to media scanner to add photo into gallery
+    private void addPhotoToMedia(File photo) {
+        Intent mediaScanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
+        Uri contentUri = Uri.fromFile(photo);
+        mediaScanIntent.setData(contentUri);
+        this.sendBroadcast(mediaScanIntent);
     }
 
     /**
@@ -271,43 +339,6 @@ public class CameraCaptureActivity extends AppCompatActivity implements SurfaceT
             throw new RuntimeException(ioe);
         }
         mCamera.startPreview();
-    }
-
-    @Override
-    public void onFrameAvailable(SurfaceTexture st) {
-        // The SurfaceTexture uses this to signal the availability of a new frame.  The
-        // thread that "owns" the external texture associated with the SurfaceTexture (which,
-        // by virtue of the context being shared, *should* be either one) needs to call
-        // updateTexImage() to latch the buffer.
-        //
-        // Once the buffer is latched, the GLSurfaceView thread can signal the encoder thread.
-        // This feels backward -- we want recording to be prioritized over rendering -- but
-        // since recording is only enabled some of the time it's easier to do it this way.
-        //
-        // Since GLSurfaceView doesn't establish a Looper, this will *probably* execute on
-        // the main UI thread.  Fortunately, requestRender() can be called from any thread,
-        // so it doesn't really matter.
-        if (VERBOSE) Log.d(TAG, "ST onFrameAvailable");
-        mGLView.requestRender();
-    }
-
-    @Override
-    public boolean onTouchEvent(MotionEvent event) {
-        switch (event.getAction()) {
-            case MotionEvent.ACTION_DOWN:
-                xStart = event.getX();
-                break;
-            case MotionEvent.ACTION_UP:
-                xEnd = event.getX();
-
-                if (xEnd - xStart > MIN_DISTANCE) {
-                    onNewFilterSelected(true);
-                } else if (xStart - xEnd > MIN_DISTANCE) {
-                    onNewFilterSelected(false);
-                }
-                break;
-        }
-        return super.onTouchEvent(event);
     }
 
     private void onNewFilterSelected(boolean isLeftToRightSwipe) {
@@ -328,19 +359,6 @@ public class CameraCaptureActivity extends AppCompatActivity implements SurfaceT
             // notify the renderer that we want to change the encoder's state
             mRenderer.changeFilter(newFilter);
         });
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (!PermissionHelper.hasCameraPermission(this)) {
-            Toast.makeText(this,
-                    "Camera permission is needed to run this application", Toast.LENGTH_LONG).show();
-            PermissionHelper.launchPermissionSettings(this);
-            finish();
-        } else {
-            openCamera(DESIRED_WIDTH, DESIRED_HEIGHT);      // updates mCameraPreviewWidth/Height
-        }
     }
 }
 

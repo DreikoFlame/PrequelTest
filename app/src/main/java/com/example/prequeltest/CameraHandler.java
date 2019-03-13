@@ -17,6 +17,7 @@ import java.lang.ref.WeakReference;
 class CameraHandler extends Handler {
     private static final String TAG = CameraHandler.class.getSimpleName();
     static final int MSG_SET_SURFACE_TEXTURE = 0;
+    static final int MSG_TAKE_PHOTO = 1;
 
     // Weak reference to the Activity; only access this from the UI thread.
     private WeakReference<CameraCaptureActivity> mWeakActivity;
@@ -47,6 +48,9 @@ class CameraHandler extends Handler {
         switch (what) {
             case MSG_SET_SURFACE_TEXTURE:
                 activity.handleSetSurfaceTexture((SurfaceTexture) inputMessage.obj);
+                break;
+            case MSG_TAKE_PHOTO:
+                activity.takePhoto();
                 break;
             default:
                 throw new RuntimeException("unknown msg " + what);

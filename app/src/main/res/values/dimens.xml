@@ -1,2 +1,5 @@
 <resources>
+    <dimen name="take_photo_btn_size">80dp</dimen>
+    <dimen name="take_photo_btn_container_size">120dp</dimen>
+    <dimen name="take_photo_btn_container_margin_bottom">40dp</dimen>
 </resources>

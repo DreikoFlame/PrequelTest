@@ -11,11 +11,31 @@
             android:layout_height="match_parent"
             android:layout_gravity="center"/>
 
-    <Button
+    <!--FrameLayout нужен для фикса бага. Без него при увеличении кнопка обрезается сверху-->
+    <FrameLayout
+            android:layout_width="@dimen/take_photo_btn_container_size"
+            android:layout_height="@dimen/take_photo_btn_container_size"
+            android:layout_alignParentBottom="true"
+            android:layout_centerHorizontal="true"
+            android:layout_marginBottom="@dimen/take_photo_btn_container_margin_bottom"
+            android:background="#00ffffff">
+
+        <ImageView
+                android:id="@+id/take_photo_btn"
+                android:layout_width="@dimen/take_photo_btn_size"
+                android:layout_height="@dimen/take_photo_btn_size"
+                android:layout_gravity="center"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="@drawable/round_btn_shape_bg"
+                android:adjustViewBounds="true"/>
+    </FrameLayout>
+
+    <ProgressBar
+            android:id="@+id/progress_bar"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Photo"
-            android:onClick="takePhoto"
-            android:layout_alignParentEnd="true"/>
+            android:layout_centerInParent="true"
+            android:visibility="gone"/>
 
 </RelativeLayout>
